@@ -1,0 +1,126 @@
+---
+title: "Assignment 1"
+author: "YOUR NAME GOES HERE"
+date: 'Due 2/10'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+```
+
+## Overview
+
+You will load, clean, manipulate, and explore data from Koch and Nicholson's article (2016), "Death and Turnout". This is part 1 of 2 toward a complete replication of Table 4 from the article.
+
+There are four relevant datasets. All datasets are at Deming's GitHub page: [HERE](https://github.com/jmdeming/independent_study):
+
+- `bes05_short.dta`
+- `bes10_short.dta`
+- `ukregion_cas.tab`
+- `0501districtdata.tab`
+
+Throughout, you should use `dplyr` functions and syntax whenever possible. Also, as you work, you should periodically knit this RMD to PDF to check your code's accuracy.
+
+### Get started
+
+**1.** Load the following packages in the `setup` chunk. (You may need to install some of them first):
+
+- `tidyverse` (contains `dplyr` and `ggplot2`)
+- `readr`     (for importing `.tab` formatted data)
+- `haven`     (for importing `.dta` formatted data)
+- `here`      (recommended but not required. You might read about how `here()` works.)
+
+**2.** Import the four datasets above in the `setup` chunk.
+
+**3.** Take some time to get to know the four datasets before moving on. Examine their dimensions, variable names, etc. You may also wish to examine the `koch-nicholson_codebook` at GitHub, which contains variables descriptions for `bes05` and `bes10`.
+
+## Clean and Manipulate
+
+### 2005 BES data
+
+**4.** Examine the variables in `bes05`. They are not very informative. The `koch-nicholson_codebook` at GitHub contains more informative names. Rename the variables according to codebook.
+
+**5.** Some of the variables' current values actually denote missing data: "no response", "don't know", etc. Examine the codebook for the variables below. Recode them so that missing values are denoted as NA:
+
+- `party_strength`
+- `labor_iraq`
+- `perception_economy`
+- `likelyvote`
+
+**6.** Rename `executive_approval` to `pmtherm`. Also rename `labor_iraq` to `pmwar`.
+
+**7.** Create two new variables. Add them to `bes05`. Here are the variable definitions:
+
+- `year`: equals 2005
+- `age`: equals 2005 minus individuals' birth year
+
+### 2010 BES Data
+
+**8.** Examine the variables in `bes10`. They are not very informative. The `koch-nicholson_codebook` at GitHub contains more informative names. Rename the variables according to codebook.
+
+**9.** Some of the variables' current values actually denote missing data: "no response", "don't know", etc. Examine the codebook for the variables below. Recode them so that missing values are denoted as NA:
+
+- `party_strength`
+- `labor_afghan`
+- `perception_economy`
+- `likelyvote`
+- `income`
+
+**10.** Rename `executive_approval` to `pmtherm`. Also rename `labor_iraq` to `pmwar`.
+
+**11.** Create two new variables. Add them to `bes10`. Here are the variable definitions:
+
+- `year`: equals 2010
+- `age`: equals individuals' birth year
+
+## Append and Merge
+
+**12.** Append `bes10` to `bes05`. On doing so, you may wish to save the appended dataframe to your computer as a means of backing up your work.
+
+**13.** Merge the appended dataframe above and the data on casualties by UK region (`ukregion_cas`). The aim is to produce a dataframe that matches each individual in the BES data to the number of casualties in their UK region for 2005 and 2010. (Hint: You should merge using two "key" variables.)
+
+**14.** Merge the merged dataframe above and the data on UK district democgraphics (`districtdata`). The aim is to produce a dataframe that matches each individual to their district demographics for 2005 and 2010. (Hint: You should merge using two "key" variables.)
+
+ ## Manipulate (Again)
+
+**15.** Create the following five variables. Add them to the dataframe that you created above. Here are the variable definitions:
+
+- `white`: dummy variable that equals 1 if an individual is white and 0 otherwise.
+- `female`: dummy variable that equals 1 if an individual is female and otherwise.
+- `low_attention`: dummy variable that equals 1 if an individuals' political attention is less than 4 and 0 otherwise.
+- `married`: dummy variable that equals 1 if an individual is married and 0 otherwise.
+- `partstrength`: dummy variable that equals 1 if and individuals "very strongly" identifies with a political party and 0 otherwise.
+
+## Explore
+
+**16.** Generate summary statistics for the following variables. For each, generate the minimum, maximum, median, mean, standard deviation, and number of observations. See if you can use `dplyr`'s summary functionality to create new dataframe of summary statistics.
+
+- `likelyvote`
+- `region_cas`
+- `low_attention`
+- `female`
+- `married`
+- `income`
+- `education`
+- `age`
+- `white`
+- `partstrength`
+- `perception_economy`
+- `pmtherm`
+- `pmwar`
+- `unemploy_rate`
+- `income_pc`
+- `pct_white`
+
+**17.** Generate seperate visulizations of the distributions of `region_cas`, `low_attention`, and `likelyvote`. Be sure to select visualizations that are appropriate for variables' type. Use `ggplot2` syntax. 
+
+# Wrap Up
+
+When you finish:
+
+- Knit this RMD to PDF. 
+- Review the RMD for completeness, accuracy, and neatness.
+- Submit the RMD and PDF.
