@@ -255,7 +255,7 @@ bes_final_data <- bes_final_data %>%
 
 ## Explore
 
-**16.** Generate summary statistics for the following variables. For each, generate the minimum, maximum, median, mean, standard deviation, and number of observations. See if you can use `dplyr`'s summary functionality to create new dataframe of summary statistics.
+**16.** Generate summary statistics for the following variables. For each, generate the minimum, maximum, median, mean, standard deviation, and number of observations. See if you can use `dplyr`'s summary functionality to create and print a new dataframe of summary statistics.
 
 - `likelyvote`
 - `region_cas`
