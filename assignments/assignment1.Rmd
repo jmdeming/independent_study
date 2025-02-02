@@ -15,14 +15,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 You will load, clean, manipulate, and explore data from Koch and Nicholson's article (2016), "Death and Turnout". This is part 1 of 2 toward a complete replication of Table 4 from the article.
 
-There are four relevant datasets. All datasets are at Deming's GitHub page: [HERE](https://github.com/jmdeming/independent_study):
+There are four relevant datasets. All datasets are at Deming's GitHub page under "independent_study/datasets/koch-nicholson_2016". [HERE](https://github.com/jmdeming/independent_study) is a link to Deming's GitHub page.
 
 - `bes05_short.dta`
 - `bes10_short.dta`
 - `ukregion_cas.tab`
 - `0501districtdata.tab`
 
-Throughout, you should use `dplyr` functions and syntax whenever possible. Also, as you work, you should periodically knit this RMD to PDF to check your code's accuracy.
+Throughout, you should use `dplyr` functions and syntax whenever possible. Also, as you work, you should periodically knit this RMD to PDF to check your code's accuracy. 
 
 ### Get started
 
