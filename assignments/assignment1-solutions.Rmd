@@ -54,7 +54,7 @@ Throughout, you should use `dplyr` functions and syntax whenever possible. Also,
 
 ### 2005 BES data
 
-**4.** Examine the variables in `bes05`. They are not very informative. The `koch-nicholson_codebook` at GitHub contains more informative names. Rename the variables according to codebook.
+**4.** Examine the variables in `bes05`. Their names are not very informative. The `koch-nicholson_codebook` at GitHub contains more informative names. Rename the variables according to codebook.
 
 ```{r}
 
