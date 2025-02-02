@@ -33,7 +33,7 @@ There are four relevant datasets. All datasets are at Deming's GitHub page under
 - `ukregion_cas.tab`
 - `0501districtdata.tab`
 
-Throughout, you should use `dplyr` functions and syntax whenever possible. 
+Throughout, you should use `dplyr` functions and syntax whenever possible. Also, as you work, you should periodically knit this RMD to PDF to check your code's accuracy.
 
 
 ### Get started
