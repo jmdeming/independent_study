@@ -59,7 +59,7 @@ Throughout, you should use `dplyr` functions and syntax whenever possible. Also,
 
 ### 2010 BES Data
 
-**8.** Examine the variables in `bes10`. They are not very informative. The `koch-nicholson_codebook` at GitHub contains more informative names. Rename the variables according to codebook.
+**8.** Examine the variables in `bes10`. Their names are not very informative. The `koch-nicholson_codebook` at GitHub contains more informative names. Rename the variables according to codebook.
 
 **9.** Some of the variables' current values actually denote missing data: "no response", "don't know", etc. Examine the codebook for the variables below. Recode them so that missing values are denoted as NA:
 
