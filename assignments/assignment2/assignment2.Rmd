@@ -1,0 +1,82 @@
+---
+title: "Assignment 2 - Solutions"
+author: "Mark Deming"
+date: "Due 2/26"
+output: pdf_document
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+
+## Overview
+
+You will do a complete replication of Table 4 from Koch and Nicholson's article (2016), "Death and Turnout". This is part 2 of 2.
+
+You will require the four datasets that you used in Assignment 1. All datasets are at Deming's GitHub page: [HERE](https://github.com/jmdeming/independent_study):
+
+-   `bes05_short.dta`
+-   `bes10_short.dta`
+-   `ukregion_cas.tab`
+-   `0501districtdata.tab`
+
+Throughout, you should use `dplyr` functions and syntax whenever possible.
+
+### Get started
+
+**1.** Load the packages below. You may need to install them first.
+
+-   `tidyverse` (contains `dplyr` and `ggplot2`)
+-   `readr` (for importing `.tab` formatted data)
+-   `haven` (for importing `.dta` formatted data)
+-   `here` (recommended but not required. You might read about how `here()` works.)
+-   `estimatr` (for robust standard errors)
+-   `modelsummary` (for nice regression tables)
+-   `plm` (for panel data analysis)
+
+**2.** Import the four datasets above in the `setup` chunk.
+
+**3.** In the chunk below, clean, append, and merge the datasets as you did in Assignment 1 (up through the "Explore" section). See if you can clean `bes05` and `bes10` in two long strings of piped code.
+
+```{r}
+
+# 1. Clean bes05 in a single string of piped code
+
+# 2. Clean bes10 in a single string of piped code
+
+# 3. Append bes05 and bes10
+
+# 4. Merge the appended bes dataset with casualties
+
+# 5. Merge the bes-casualties dataset with the district data. Then, create the female, 
+# low_attention, married, and partstrength variables. Do this in a single string
+# of piped code.
+
+```
+
+# Ordinary least squares model
+
+**4.** Use `lm_robust()` to write a regression model that approximates Table 4 from Koch and Nicholson (2016). Do not include region dummies in the model.
+
+**5.** Use `modelsummary()` to display your results above in a nice regression table. Add informative coefficient labels following Table 4.
+
+**6.** Write a short paragraph of interpretation of the regression results above. Focus on the main coefficients: `region_cas`, `low_attention`, and the interaction term `low_attention:region_cas`. (What does the interaction term denote?)
+
+## Random effects model
+
+The `bes` data are panel data: the same respondents are surveyed in 2005 and 2010. We can use a random effects model to account for the panel structure.
+
+**7.** Create a new dataset that is a duplicate the Koch and Nicholson data above (2016). Designate the dataset as panel data using an appropriate function from the `plm` package. Use the `besid` and `year` variables as the index.
+
+**8.** Use `plm()` to write a random effects model that closely approximates Table 4 from Koch and Nicholson (2016). You should include region dummies in the model.
+
+**9.** Write a short paragraph of interpretation of the regression results above. In addition to interpreting the main coefficients, write 2-3 sentences about the random effects model. What does the random effects model add to the OLS model?
+
+# Wrap Up
+
+When you finish:
+
+-   Knit this RMD to PDF.
+-   Review the RMD for completeness, accuracy, and neatness.
+-   Submit the RMD and PDF.
