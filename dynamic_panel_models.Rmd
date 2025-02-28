@@ -1,0 +1,205 @@
+---
+title: "Dynamic panel models primer"
+author: "Mark Deming"
+date: "2/25/25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(pder)
+
+data("RDPerfComp")
+panel_wage <- RDPerfComp
+```
+
+# Dynamic panel models
+
+So far, we have examined "static" panel models, which assume that the current value of the DV depends just on explanatory variables at the same time.
+
+Dynamic panel models assume that the past value of the DV helps explain the current value. This is realistic in many political science settings, where past political or economic conditions shape today's outcomes. **Dynamic panel models capture this idea by incorporating a lagged DV as a predictor of the current DV value.**
+
+
+## Why dynamic panel models are tricky
+
+When we include a lagged dependent variable (like `lag(gdp_growth)` or `lag(voter_turnout))`, we introduce a circular problem:
+
+The lagged dependent variable is naturally correlated with unobserved historical shocks — the errors from previous periods.
+This creates *endogeneity*, meaning the lagged variable is not truly independent, and the model’s estimates will be biased if we use standard OLS or fixed effects methods.
+
+At the same time, panel datasets have another complication: each unit (country, party, legislator) has its own time-invariant characteristics (like geography, legal system, or political culture) that also influence outcomes. Ignoring these fixed effects leads to omitted variable bias.
+
+This is why dynamic panel data analysis requires specialized methods — techniques that:
+
+1. Control for fixed effects (things about countries that don't change over time).
+2. Correct for endogeneity (the lagged dependent variable being correlated with past shocks).
+
+
+## Example:
+
+Suppose you want to understand how political instability affects economic growth across 100 countries from 1990 to 2020. You know that:
+
+- Past economic performance matters: Countries that grew quickly last year are likely to keep growing this year (path dependence).
+- Political instability is likely correlated with past economic shocks: Economic crises often trigger instability.
+- Countries differ in ways that don’t change over time: Geographic location, natural resource endowment, colonial history, etc.
+
+A dynamic panel model allows you to account for all this. You include lagged economic growth to capture momentum, but you need a method like Arellano-Bond GMM to deal with the endogeneity problem this creates.
+
+
+# Overview of dynamic panel models
+
+Before we dig in to the models and their syntax, here is a brief overview of the main models and their general use:
+
+
+| Model                | Handles Fixed Effects? | Handles Endogeneity? | Best for...                                           |
+|----------------------|--------------------|------------------|--------------------------------------------------|
+| Pooled OLS           | No                 | No               | Simple baseline comparison                       |
+| Fixed Effects (Within) | Yes              | No               | Controlling for country-specific factors         |
+| Ahisao IV            | Yes                | Yes              | Endogeneity correction via IV                    |
+| One-Step GMM         | Yes                | Yes              | Dynamic panel, small sample, weaker instruments  |
+| Two-Step GMM         | Yes                | Yes              | Dynamic panel, larger sample, better efficiency  |
+
+
+### Rules of thumb
+- Fixed Effects Model: Good if we believe only fixed effects matter (but endogeneity is still a problem).
+- First-Difference IV: Useful if we suspect endogeneity of lagged GDP growth.
+- One-Step GMM: Better when we want a dynamic panel approach without too many instruments.
+- Two-Step GMM: Best when we need efficiency, but standard errors must be corrected.
+
+
+## 1. Pooled OLS regression
+
+The sample code for all models below uses the `RDPerfComp` dataset contained in the `pder` package. The examples are from: (https://bookdown.org/gcorredor/dynamic_ar1_panel/dynamic_ar1_panel.html#fn1).
+
+```{r}
+# Load packages
+library(pder)
+
+# Load data
+data("RDPerfComp")
+panel_wage <- RDPerfComp
+```
+
+```{r}
+panel_OLS <- plm('n ~ lag(n) - 1',
+                 panel_wage,
+                 model = 'pooling')
+```
+
+This code runs a pooled OLS model. The option `model = 'pooling'` tells `plm()` to treat the data as if it were a simple pooled regression model, ignoring the panel structure.
+
+### Why use it
+- Baseline for comparison for more advance panel data models.
+
+
+## 2. Fixed effects (within) regression
+
+```{r}
+panel_within <- plm('n ~ lag(n) - 1',
+                    panel_wage,
+                    model = 'within')
+```
+
+### What it does
+- Runs a pooled OLS regression on panel data using the `plm` package.
+- DV is `n`, and the IV is `lag(n)`, which means the first lag of `n `is being used as a predictor.
+- `- 1` at the end means no intercept is included.
+- `model = 'pooling'` tells `plm()` to treat the data as if it were a simple pooled regression model, ignoring the panel structure.
+
+### Why use it
+- Remove unobserved heterogeneity by controlling for individual effects.
+- We think that time-invariant factors may affect the DV, such as abilitiy in wage studies.
+
+
+## 3. Ahisao's first-difference IV estimator
+
+```{r}
+panel_ahsiao <- plm('diff(n) ~ lag(diff(n),1) - 1 | lag(n, 2)',
+                    panel_wage,
+                    model = 'pooling')
+```
+
+### What it does
+- Runs a first-difference instrumental variables (IV) regression, following Ahisao's method.
+- DV is `diff(n)`, which means it is taking the first difference of `n` (i.e., `n_t - n_{t-1}`).
+- IV is `lag(diff(n),1)`, meaning the first lag of the differenced DV is included.
+- `| lag(n, 2)` means that `lag(n,2)` (the second lag of `n`) is used as an instrumental variable for `lag(diff(n),1)`.
+- `model = 'pooling'` means that the model treats the data as a pooled panel (OLS-like) while using the instrumental variable.
+
+### Why use it
+- Helps correct for endogeneity by using past values of the variable as instruments.
+- The first-difference transformation removes individual fixed effects.
+
+
+## 4. One-step GMM (difference GMM) 
+
+a.k.a., Arrellano-Bond estimator
+
+```{r}
+panel_one_step_gmm <- pgmm(n ~ lag(n,1) - 1 | lag(n, 2:99),
+                    panel_wage,
+                    transformation = 'd',
+                    model = 'onestep',
+                    effect = 'individual')
+```
+
+Above, GMM stands for "gernalized method of moments."
+
+### What it does
+- Runs a Generalized Method of Moments (GMM) regression using the Arellano-Bond estimator.
+- DV is `n`, and the IV is `lag(n,1)`, meaning the first lag of `n` is used as a predictor.
+- `| lag(n, 2:99)` means that lags 2 through 99 of `n` are used as instruments.
+- `= 'd'` means the model applies first-difference transformation to eliminate fixed effects.
+- `model = 'onestep'` tells `pgmm()` to use the one-step GMM estimator.
+- `effect = 'individual'` ensures that individual-specific effects are considered.
+
+### Why use it
+- Computationally simpler and more robust when there are fewer observations.
+- Useful when dealing with endogeneity in dynamic panel data models.
+
+## 5. Two-step GMM
+
+a.k.a., Arrellano-Bond estimator
+
+```{r}
+panel_two_steps_gmm <- pgmm(n ~ lag(n,1) - 1 | lag(n, 2:99),
+                    panel_wage,
+                    transformation = 'd',
+                    model = 'twosteps',
+                    effect = 'individual')
+```
+
+### What it does
+- Similar to the one-step GMM model, but here `model = 'twosteps'` applies a two-step GMM estimator.
+- The second-step estimator uses a variance-covariance matrix that helps improve efficiency.
+
+### Why use it
+- More efficient than one-step GMM in large samples.
+- But, standard errors in two-step GMM can be downward biased, so robust standard errors often needed.
+
+
+## Dynamic regression models in political 
+
+### Pooled OLS 
+- Przeworski, Adam, and Fernando Limongi. 1997. "Modernization: Theories and Facts." World Politics 49(2): 155-183.
+- Gartzke, Erik. 2007. "The Capitalist Peace." American Journal of Political Science 51(1): 166-191.
+
+### FE regression
+**Note that FE regression is the workhorse model of political science.**
+
+- Ross, Michael. 2001. "Does Oil Hinder Democracy?" World Politics 53(3): 325-361.
+- Hicken, Allen. 2009. "Building Party Systems in Developing Democracies." Cambridge University Press.
+- Haber, Stephen, and Victor Menaldo. 2011. "Do Natural Resources Fuel Authoritarianism? A Reappraisal of the Resource Curse." American Political Science Review 105(1): 1-26.
+
+### Ahisao
+- Acemoglu, Daron, Simon Johnson, and James A. Robinson. 2001. "The Colonial Origins of Comparative Development." American Economic Review 91(5): 1369-1401.
+
+While this is cross-sectional rather than panel, they use IV techniques to address endogeneity (settler mortality as an instrument for institutions). This is a good methodological cousin.
+
+### Arellano Bond
+- Persson, Torsten, and Guido Tabellini. 2003. The Economic Effects of Constitutions. MIT Press.
+- Keefer, Philip. 2007. "Clientelism, Credibility, and the Policy Choices of Young Democracies." American Journal of Political Science 51(4): 804-821.
+- Blundell, Richard, and Stephen Bond. 1998. "Initial Conditions and Moment Restrictions in Dynamic Panel Data Models." Journal of Econometrics 87(1): 115-143.
+- Haber, Stephen. 2005. "Political Institutions and Financial Development: Evidence from the Political Economy of Bank Regulation in Mexico and the United States." American Political Science Review 99(3): 387-402.
+
