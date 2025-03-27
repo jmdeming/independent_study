@@ -1,0 +1,186 @@
+---
+title: "Regression discontinuity"
+author: "Mark Deming"
+date: "2025-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+
+
+```
+
+## Overview
+
+Regression discontinuity is all about **research design** rather than econometric technique. We want to estimate a causal effect, but randomization is not possible. If assignment to treatment is based on a rule or cutoff (i.e., a **discontinuity**), we can leverage "as if" randomization to estimate a causal effect.
+
+**Key intuition:**
+
+- Treatment assignment is based on a rule.
+
+- We compare observations just above and below the cutoff.
+
+- We think of observations near the cutoff "as if" randomly assigned to treatment.
+
+- Any discontinuity created by the rule helps us estimate the causal effect. Units just below the cutoff are valid **counterfactuals** for units just above it.
+
+
+## Sharp vs. fuzzy discontinuity
+
+In **sharp RD**, the rule is strictly followed. For example, imagine that students who score 80 or higher on an exam receive a scholarship. Those who score 79 or lower do not. If the rule is strictly followed in practice, then we are dealing with sharp RD.
+
+In **fuzzy RD**, the rule is not strictly followed. It influences treatment but does not completely determine treatment. Returning to our test scores example, perhaps most students who score 80 or higher receive a scholarship, but not all. And, perhaps some students who score 79 or lower still receive a scholarship. The **probability** of getting the treatment (here, a scholarship) jumps at the cutoff, but it is not a perfect rule. This is a fuzzy RD.
+
+Put differently, if crossing the the cutoff is not the *only* cause of receiving treatment, then we are dealing with fuzzy RD. 
+  
+**Key differences: Sharp vs. fuzzy RD**
+
+| Feature              | Sharp RD                           | Fuzzy RD                             |
+|----------------------|------------------------------------|--------------------------------------|
+| Rule at cutoff       | Always followed                    | Often followed, but not perfectly    |
+| Treatment assignment | Determined only by the cutoff      | Influenced by the cutoff             |
+| Treatment status     | Jumps from 0 to 1 exactly at cutoff| Probability of treatment increases at cutoff |
+| Effect estimated     | Treatment effect directly          | Needs special techniques (like IV)   |
+
+
+## Example in R
+
+This example is from University College London's (UCL) PUBL0050 course on *Causal Inference*: [Link](https://uclspp.github.io/PUBL0050/lectures/upload/lecture9.pdf)
+
+Meyersson (2014) examines whether Islamic political control affects women's empowerment. Using data from Turkish municipalities in the 1994 elections, he finds that municipalities where Islamic parties won tended to have:
+
+1. Higher rates of secondary school completion among women (Education).
+
+2. More women moving from being classified as housewives to wage earners (Labor market participation).
+
+But does this reflect a causal relationship? A key challenge is that municipalities where Islamic parties won may differ in important ways from those where they lost. Meyersson's solution is to focus on municipalities where Islamic parties barely won or barely lost. Why? In very close elections, the outcome is essentially random — small chance events decide who wins.
+
+**Setup**
+```{r}
+# Load packages
+library(readr)
+library(rdd)
+library(modelsummary)
+library(tidyverse)
+library(ggthemes)
+
+# Grad Meyerrson data from GitHub
+url <- "https://raw.githubusercontent.com/UCLSPP/datasets/refs/heads/master/data/islamic_women.csv"
+islamic <- read_csv(url(url))
+```
+
+Here is a description of variables:
+
+`margin`: Islamic party margin. > 0 denotes Islamic party win. < 0 denotes Islamic party loss.
+`school_men`: secondary school completion rate for men aged 15-20.
+`school_women`: secondary school completion rate for women aged 15-20.
+`log_pop`: log of municipality population in 1994.
+`sex_ratio`: sex ratio of municipality in 1994.
+`log_area`: log of municipality area in 1994.
+
+**Create treatment**
+```{r}
+# Create the treatment variable
+islamic$islamic_win <- as.numeric(islamic$margin > 0)
+  
+# Tabulate the treatment variable
+table(islamic$islamic_win)
+```
+
+The Islamic party won 328 municipalities.
+
+**Difference in means**
+```{r}
+# Difference in means
+diff_in_means <- mean(islamic$school_women[islamic$islamic_win==1],na.rm=T) - 
+  mean(islamic$school_women[islamic$islamic_win==0],na.rm=T)
+
+diff_in_means
+```
+
+Difference in means is -0.026. Across all municipalities, Islamic party government is associated with lower female education rates. This is **not a credible estimate** of the causal effect of Islamic party government on female education. For one, places that strongly support Islamic parties are probably less supportive of female education to begin with.
+
+**Select a bandwidth**
+```{r}
+band <- IKbandwidth(islamic$margin, islamic$school_women)
+band
+```
+
+`IKbandwidth` calculates the Imbens-Kalyanaraman optimal bandwidth for local linear regression in RDD. The result indicates that the optimal bias-variance trade-off is achieved for this specific RD by only including municipalities where there vote share margin for the Islamic party was -0.239 to 0.239.
+
+**Grab units within bandwidth**
+```{r}
+islamic_rdd <- islamic %>%
+  filter(abs(margin) < band)
+
+# Alternatively
+# islamic_rdd  <- islamic[abs(islamic$margin) < band , ]
+```
+
+**Run linear regression to find LATE**
+```{r}
+# model
+linear_rdd_model <- lm(school_women ~ margin + islamic_win,
+                       data=islamic_rdd)
+# regression table
+modelsummary::modelsummary(linear_rdd_model,
+                           output = "markdown")
+```
+
+The regression indicates a local average treatment effect (LATE) of .033. This is not very credible because it assumes that the slope is the same on either side of the cutoff. To see this, let's create a plot:
+
+```{r}
+# plotting the relationship
+## predicted values control
+control <- data.frame(margin = seq(-round(band,2),0,.01), islamic_win = 0)
+control$pred <- predict(linear_rdd_model, newdata = control)
+## predicted values treated
+treated <- data.frame(margin = seq(0,round(band,2),.01), islamic_win = 1)
+treated$pred <- predict(linear_rdd_model, newdata = treated)
+## combine  
+pred <- rbind(control,treated)
+pred$islamic_win <- as.factor(pred$islamic_win)
+## plot
+ggplot(islamic, aes(x = margin, y = school_women)) +
+  geom_point(alpha=.2) + # observed data
+  geom_vline(xintercept=0,linetype="dotted") + # vertical line at cutoff
+  geom_line(data = pred, aes(y = pred, color = islamic_win), linewidth = 1) + # regression line on either side of cutoff
+  geom_segment(x = 0, xend =  0, 
+               y = pred$pred[pred$margin == 0 & pred$islamic_win == 0], yend = pred$pred[pred$margin == 0 & pred$islamic_win == 1],
+               linewidth = 1.5, color = "red") + # vertical line for LATE
+  scale_y_continuous("Women Secondary School Completion Rate", limits = c(0,.6)) +
+  scale_x_continuous("Islamic Party Election Margin", limits = c(-band, band)) +
+  scale_colour_brewer("Islamic Party Win", palette = "Set2") +
+  theme_clean() +
+  lemon::coord_capped_cart(bottom="both",left="both") +
+  theme(plot.background = element_rect(color=NA),
+        panel.grid.major.y = element_blank(),
+        legend.position = "bottom")
+```
+
+**Run `RDestimate` to find LATE**
+```{r}
+rd_est <- RDestimate(school_women ~ margin,
+                       cutpoint = 0, bw = band, data = islamic)
+summary(rd_est)  
+```
+
+This gives a LATE estimate of 0.0296 with a p value of 0.016, indicating that the effect is clearly significant at the 5% level. The estimate is only slightly lower than in the manual version of RDD that we estimated above.
+
+
+## What treatments depend on a threshold?
+
+RD is widely used in rule-based settings where it is clear how treatment was assigned:
+
+- Elections (narrow races)
+
+- Administrative programs
+
+- Geographic boundaries
+
+RD ultimately relies on **knowing about** and **having access** to a running variable that determines (or at least influences) treatment status.
