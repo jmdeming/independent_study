@@ -17,7 +17,7 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-Regression discontinuity is all about **research design** rather than econometric technique. We want to estimate a causal effect, but randomization is not possible. If assignment to treatment is based on a rule or cutoff (i.e., a **discontinuity**), we can leverage "as if" randomization to estimate a causal effect.
+Regression discontinuity is all about **research design** (more so than econometric technique). We want to estimate a causal effect, but randomization is not possible. If assignment to treatment is based on a rule or cutoff (i.e., a **discontinuity**), we can leverage "as if" randomization to estimate a causal effect.
 
 **Key intuition:**
 
