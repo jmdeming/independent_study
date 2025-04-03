@@ -1,0 +1,360 @@
+---
+title: "Time-Series Regression"
+author: "Mark Deming"
+date: "4/01/2025"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE,
+                      out.width = "60%")
+```
+
+```{r}
+library(dynlm)
+library(tseries)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(zoo)
+library(aTSA)
+```
+
+# Overview
+This document works through the concepts laid out in Chapter 14 of *Introduction to Econometrics in R* and Chapter 17 of *The Effect*. Let's start with the big picture: How are the concepts presented in the readings connected? Here's my way of thinking about it:
+
+- **Key Concepts**: What we need to know before doing anything serious with time-series data.
+
+- **Forecasting**: Analyzing what's going to happen?
+
+- **Event studies**: Analyzing what happened?
+
+Let's examine these in turn. As we do so, I will incorporate what I think are the most relevant examples in R from the texts.
+
+
+# Key concepts
+Before we do anything serious with time-series data, we need to understand the basic structure of the data. We want to know about **three things**:
+
+- **Stationarity**: Are the data stable over time, or do they drift / trend?
+
+- **Autocorrelation**: Are past values related to current values (the answer is usually "yes")?
+
+- **Lags**: How far back do we need to look in order to understand what is happening now?
+
+These ideas are like learning the **grammar of time-series**. We need to speak the language of time-series properly.
+
+
+## Stationarity
+In simple terms, stationary data are data that **do not drift or trend**. Stationary data look like the data in the chart below: The individual values bounce around a constant mean. The variance stays roughly the same over time.
+
+```{r echo = FALSE, out.width="60%"}
+# Generate stationary data
+set.seed(42)
+y <- rnorm(200, mean = 0, sd = 1)
+time <- 1:200
+
+# Create data frame
+df <- tibble(time = time, value = y)
+
+# Plot using ggplot
+ggplot(df, aes(x = time, y = value)) +
+  geom_line(color = "blue", linewidth = .5) +
+  geom_hline(yintercept = mean(y), linetype = "dashed", color = "red", linewidth = .5) +
+  labs(title = "Example of Stationary Time Series",
+       x = "Time",
+       y = "Value") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = 180, y = mean(y) + 0.5, label = "Mean", color = "red")
+```
+
+Stationarity is important because **most time-series models assume that data are stationary**. We risk spurious regression if data are not stationary.
+
+We can make our data stationary via three methods:
+
+- **Differencing**: subtract the previous value from the current value. Good when data are wandering randomly (e.g., GDP).
+
+- **Detrending**: fit and remove a trend line. Good when data are trending smoothly in a predictable way (e.g., global temperatures).
+
+- **Log transforming**: calculate the log of variable values. Good when data exhibit exponential growth (e.g., GDP, population). 
+
++----------------------+----------------------------------------------------------+------------------------------------------+
+| Transformation       | When to Use                                              | Example Variables                        |
++----------------------+----------------------------------------------------------+------------------------------------------+
+| Differencing         | When the series has a random (stochastic) trend         | GDP, stock prices, exchange rates        |
+|                      | or shows slow-decaying autocorrelation (unit root)      |                                          |
++----------------------+----------------------------------------------------------+------------------------------------------+
+| Detrending           | When the trend is smooth and predictable (linear trend) | Global temperature, tech costs           |
+|                      | and you want to isolate short-term variation            |                                          |
++----------------------+----------------------------------------------------------+------------------------------------------+
+| Log Transformation   | When variance grows with the level of the series        | GDP, income, prices, population          |
+|                      | or growth is roughly exponential                        |                                          |
++----------------------+----------------------------------------------------------+------------------------------------------+
+
+
+## Autocorrelation
+Autocorrelation means that a variable is correlated with its own past values. This is super common in time-series data. It matters because it **violates a core assumption** of OLS: that errors are independent.
+
+We can use `acf` to test for autocorrelation. For example:
+
+```{r out.width="60%"}
+# Simulate some AR(1) data with positive autocorrelation
+set.seed(123)
+y <- arima.sim(n = 100, list(ar = 0.8))
+
+# Calculate the first 4 autocorrelations of the simulated data
+acf(y, lag.max = 4, plot = FALSE)
+```
+
+Above, we see that there is a strong positive correlation with the previous value (.777). The correlation with the value from two periods ago is also high (.608). The correlation with the value from three periods ago is smaller but still present (.486). And so forth.
+
+
+## Lags
+Lags are just past values of a variable. Lag 1 is the value from one period ago. Lag 2 is the value from two periods ago. And so on. Lags matter because in time-series data, present values often depend on the past (see autocorrelation above). Below, **we will leverage this idea for forecasting:**
+
+```{r eval = FALSE}
+model <- dynlm(inflation ~ L(inflation, 1) + L(inflation, 2))
+```
+
+The model above is called an AR(2) model -- autoregressive with 2 lags. A good rule of thumb is that if your variable exhibits autocorrelation, add a lag of the variable to the model.
+
+But which lag? We have **2 main strategies**:
+
+- Use theory.
+
+- Fit models with different lags and compare them using AIC and BIC.
+
+```{r eval = FALSE}
+AIC(arima(y, order = c(1,0,0)))  # AR(1)
+AIC(arima(y, order = c(2,0,0)))  # AR(2)
+```
+
+
+# Forecasting
+Once you have a handle on the basic concepts above, you can **use them to forecast** -- build models that predict future values. The main model introduced in Hanck et al. is the autoregressive, or AR, model. AR models use lagged values of a variable to predict future ones.
+
+Let's do an example using **data on monthly flight passengers** from 1949 to 1960:
+
+**Step 1**. Load packages and data:
+```{r}
+# Load packages
+library(dynlm)
+library(tseries)
+
+# Load data
+data("AirPassengers")
+```
+
+**Step 2**: Visualize the data:
+```{r}
+# Plot the data
+# Use base R, since ggplot does not take t-series data
+plot(AirPassengers) 
+```
+
+Study the plot. You should notice 2 things: 
+
+1. a trend
+
+2. increasing variance
+
+There is also some (3.) seasonality in the data. Put differently, **the data are non-stationary**. Before we can forecast, we must make them stationary.
+
+**Step 3**: Make the data stationary:
+```{r}
+# Log-transform data to stabilize variance
+y <- log(AirPassengers)
+
+# First-difference to remove trend
+dy <- diff(y)
+
+# 12 month lag to remove seasonality
+dy2 <- diff(dy, lag = 12)
+
+# Plot the data
+# Using base R, since ggplot does not take t-series data
+plot(dy2) 
+
+# Check for stationary data using Augmented Dickey-Fuller test
+adf.test(dy2)
+```
+
+The data shown in the chart above are much better. This is confirmed by the output of `adf`: the p-values are all < 0.01, which indicates that we **reject the null hypothesis of non-stationarity across all three tests**. We can now do some forecasting.
+
+**Step 4**: Run an autoregressive model
+```{r}
+# Designate as t-series data
+dy.ts <- ts(dy2, start = c(1949, 2), frequency = 12)
+
+# Run model
+model_ar1 <- dynlm(dy.ts ~ L(dy.ts, 1))
+summary(model_ar1)
+```
+
+**Step 5**: Use the model to forecast
+```{r}
+last_value <- tail(dy.ts, 1)
+forecast_diff_log <- coef(model_ar1)[1] + coef(model_ar1)[2] * last_value
+```
+
+**Step 6**: Convert back to AirPassengers units
+```{r}
+# Take last observed log(Passengers) and add predicted diff
+last_log_num <- as.numeric(tail(y, 1))
+last_d1_num <- as.numeric(tail(dy, 1))
+forecast_diff_log_num <- as.numeric(forecast_diff_log)
+
+# Add them safely
+forecast_log <- last_log_num + last_d1_num + forecast_diff_log_num
+forecast_level <- exp(forecast_log)
+
+# Print result
+forecast_level
+```
+
+The predicted number of passengers for January 1961 -- the next month -- is 480.
+
+
+# Event studies
+In event studies, we want to examine the effect of a specific event on a variable of interest. We (1) identify the event and (2) compare the outcome variable before and after the event. That's it.
+
+To see this in action, let's examine the **impact of the Gulf War on oil prices**. We can start with a simple comparison of average oil prices before and after the war's onset:
+
+**Step 1:** Load packages and data
+```{r}
+# Load packages
+library(quantmod)
+library(lubridate)
+
+# Step 1: Get oil price data from FRED (WTI crude oil spot price)
+getSymbols("DCOILWTICO", src = "FRED")
+oil <- DCOILWTICO  # This is a daily ts object
+
+# Clean data (remove NAs)
+oil <- na.omit(oil)
+```
+
+**Step 2:** Focus on a window around the War's onset
+```{r}
+# Step 2: Focus on a window around the Gulf War event (July–October 1990)
+event_date <- as.Date("1990-08-02")  # Iraq invades Kuwait
+window_start <- as.Date("1990-07-01")
+window_end <- as.Date("1990-10-31")
+oil_window <- window(oil, start = window_start, end = window_end)
+```
+
+**Step 3:** Visualize the data
+```{r}
+# Step 3: Plot it
+plot(oil_window,
+     main = "WTI Crude Oil Prices Around 1990 Gulf War",
+     ylab = "Price (USD/barrel)",
+     xlab = "Date",
+     col = "darkred", lwd = 2)
+abline(v = event_date, col = "blue", lty = 2)
+legend("topleft", legend = "Invasion of Kuwait", col = "blue", lty = 2, bty = "n")
+```
+
+**Step 4:** Compare before and after averages
+```{r}
+# Step 4: Quantify the effect (compare average before and after)
+pre_event <- oil[paste0("1990-07-01/", event_date - 1)]
+post_event <- oil[paste0(event_date + 1, "/1990-10-31")]
+pre_mean <- mean(pre_event)
+post_mean <- mean(post_event)
+
+pre_mean
+post_mean
+post_mean - pre_mean
+```
+
+Above, we see that oil prices increased by around 14 USD per barrel after the onset of the Gulf War. This is strong preliminary evidence of the war’s impact on oil markets. A more rigorous analysis, however, uses **regression analysis to estimate this effect while accounting for trends in the data**.
+
+Specifically, we can **add an interaction term** to a regression model that includes both a time trend and a post-event indicator. The interaction term allows the slope of the time trend to change after the event — that is, it captures how the trajectory of prices may have shifted once the war began.
+
+The coefficient on the interaction term tells us whether the rate of change in oil prices increased or decreased after the invasion. Meanwhile, the coefficient on the post-event dummy captures any immediate jump in oil prices at the time of the event, holding the trend constant.
+
+Together, these terms allow us to estimate both the short-term shock and the longer-term shift in trends caused by the Gulf War — a more complete picture than simply comparing averages before and after.
+
+**Step 1:** Focus on a window around the Gulf War
+```{r}
+# Step 1: Focus on window around Gulf War
+event_date <- as.Date("1990-08-02")
+oil_window <- window(oil, start = as.Date("1990-07-01"), end = as.Date("1990-10-31"))
+```
+
+**Step 2:** Create the dataframe and variables
+```{r}
+# Step 2: Create dataframe
+oil_df <- data.frame(
+  date = index(oil_window),
+  price = as.numeric(oil_window)
+)
+
+# Create variables
+oil_df$time <- 1:nrow(oil_df)  # linear time trend
+oil_df$post <- as.numeric(oil_df$date > event_date)  # post-event dummy
+oil_df$interaction <- oil_df$time * oil_df$post      # interaction term
+```
+
+**Step 3:** Run the regression
+```{r}
+# Step 3: Run segmented regression
+model_segmented <- lm(price ~ time + post + interaction, data = oil_df)
+summary(model_segmented)
+```
+
+
+## Event Studies with Multiple Affected Groups
+Some events affect many groups at once — for example, a national law, an EU-wide regulation, or a natural disaster spanning multiple regions. When this happens, we can extend our event study analysis using one of three main approaches:
+
+### Option 1: Average All the Groups Together
+
+One simple option is to collapse all groups into a single time series by **averaging their outcomes across time**. Then you apply your standard event study methods to that average series.
+
+**Example:**  
+If you’re analyzing how an EU financial regulation affected stock prices, you might average stock prices from all affected countries in each time period, then analyze the resulting single time series.
+
+**Pros:**
+- Very easy to implement.
+- Makes use of familiar, single-series tools.
+
+**Cons:**
+- You lose variation across groups.
+- You can’t estimate group-specific effects.
+- You may underestimate uncertainty because variation across groups is hidden.
+
+### Option 2: Run a Separate Event Study for Each Group
+
+Another approach is to apply the standard event study method to **each group individually**. This gives you an effect estimate for each group, which you can compare or summarize.
+
+**Example:**  
+Estimate the effect of the same regulation on each EU country's stock prices separately, and compare the size and direction of effects across countries.
+
+**Pros:**
+- Lets you explore **heterogeneous effects** (some groups may benefit more than others).
+- Simple to explain and interpret.
+- Enables plotting the distribution of effects across groups.
+
+**Cons:**
+- Can be noisy for small groups or short time series.
+- Harder to summarize with a single effect size.
+
+### Option 3: Stack the Groups and Run a Pooled Regression
+
+The most powerful approach is to **stack all groups into one dataset** (like a panel) and estimate a pooled regression. This lets you include a post-event dummy, a time variable, and an interaction term — plus fixed effects to control for group differences.
+
+**Example:**  
+Create a regression that models outcomes across all countries using group and time fixed effects, and includes an interaction term to estimate how trends changed after the event.
+
+**Pros:**
+- Uses all available data efficiently.
+- Estimates a single, precise average treatment effect.
+- Can control for group and time differences using fixed effects.
+- Can estimate standard errors correctly.
+
+**Cons:**
+- More complex to set up.
+
