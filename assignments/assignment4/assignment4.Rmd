@@ -1,0 +1,145 @@
+---
+title: "Assignment 4"
+author: "Mark Deming"
+date: "SPR 2025"
+output: pdf_document
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{multirow}
+  - \usepackage{graphicx}
+  - \usepackage{adjustbox}
+  - \usepackage{rotating}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Packages
+
+
+# Data
+
+```
+
+# Overview
+You will replicate some parts of Angrist & Krueger's (1991) analysis of the effect of compulsory schooling laws on educational attainment and earnings. Specifically, you will replicate:
+
+- Figure I (p. 983)
+- Table V (p. 1000)
+
+Both of these focus on males born during 1930-1939. The basic procedure applies to other cohorts too (e.g., 1940-1949). **The main aim of the assignment is to practice regression with instrumental variables, or two-stage least squares regression (TSLS).**
+
+The data are contained in `angrist-krueger_1991.csv`, which is available at the course GitHub repository: https://github.com/jmdeming/independent_study/tree/main/datasets. There is alos a `README.txt` file that describes the variables in the dataset.
+
+
+# Get started
+
+**1.** Load the `angrist-krueger_1991.csv` dataset.
+
+**2.** You will also require the following packages. Load them:
+
+- `here`
+- `readr`
+- `tidyverse`
+- `ivreg`
+- `modelsummary`
+
+
+# Figure I (p. 983)
+
+Examine Figure I on page 983. To replicate the Figure, you must first summarize the data. Specifically, the Figure shows the average years of schooling by year and quarter of birth. The Figure is limited to individuals born in 1930 through 1939. This means that you must:
+
+- Filter the data to include only individuals born in 1930 through 1939.
+- Group the data by year of birth (`yob`) and quarter of birth (`qob`).
+- Calculate the average years of schooling (`educ`) by year and quarter of birth.
+
+**3.** Summarize the data, calculating the average years of schooling by year and quarter of birth for individuals born during 1930-1939.
+```{r}
+# Summarize
+
+```
+
+The next step is to plot the summarized data above. The challenge is to get the data along the x-axis to show the year and quarter of birth. To do this, we will combine the year and quarter of birth into a single variable and then plot that variable. For example:
+
+- `yob = 1930` / `qob = 1` becomes `1930.00`
+- `yob = 1930` / `qob = 2` becomes `1930.25`
+- `yob = 1930` / `qob = 3` becomes `1930.50`
+- `yob = 1930` / `qob = 4` becomes `1930.75`
+- ... and so forth
+
+My code below does this for you. Examine my code. Be sure that you know what it is doing and why. Then run the code.
+```{r}
+# Create a new variable that combines the year and quarter of birth
+summarized_dat <- summarized_dat %>%
+  mutate(year_qob = yob + (qob - 1) * .25)
+```
+
+**4.** Plot the summarized data. The x-axis should show the year and quarter of birth. The y-axis should show the average years of schooling. Label the points with the quarter of birth.
+```{r out.width = "80%"}
+# Plot
+
+```
+
+
+# Table V (p. 1000)
+
+You will now replicate Table V on page 1000 of the article. The Table presents results from 8 regression models. Models 1, 3, 5, and 7 are OLS models. Models 2, 4, 6, and 8 are TSLS (Two Stage Least Squares) models. The models are estimated using the `ivreg` function from the `ivreg` package.
+
+Table V analyzes men born during 1930-1930. The first step, then, is to create a subset of the data that grabs on rows in which `yob` is within 1930:1939. 
+
+**5.** Subset the data to grab only rows in which `yob` is within `1930:1939`.
+```{r}
+# Subset the data, grabbing men born 1930-1939
+
+```
+
+The next step is ensure that the `qob` and `yob` variables are treated as factors. This is important because the models will include dummies for these variables.
+
+**6.** Convert `qob` and `yob` to factors.
+```{r}
+# Convert qob and yob to factor variables
+
+```
+
+The next step is to create the instrument. The authors use quarter of birth (`qob`) as an instrument for education. But, they do so *within each year of birth (`yob`)*. This is because compulsory schooling laws change over time. So, instead of using just `qob`, we interact `qob` with `yob`. This gives us 30 instruments: `Q1_1930`,`Q2_1930`, `...`, `Q4_1939`. These allow the effect of quarter of birth to vary by cohort — a key assumption in the authors' identification strategy.
+
+The relevant R function for creating interactions with factor variables is `interaction()`. 
+
+**7.** Create the instrument using the `interaction()` function.
+```{r}
+# Create instrument
+
+```
+
+You are now ready to estimate the models. You should estimate all models using the `lm()` and `ivreg()` functions. The main coefficients for each model should be nearly identical to those shown in Table V. The exception is the coefficient for `ageq` and `agesq`. The coefficients for these variables will be slightly different (not sure why!). Standard errors may also differ somewhat.
+
+**8.** Estimate models 1-8 using the `lm()` and `ivreg()` functions.
+```{r}
+
+```
+
+The next step is to create a table that summarizes the results of the models. You should use `modelsummary` to do so. If you are up for the challenge, you might see if you can add rows to the table that show whether or not the model includes year-of-birth dummies and region-of-residence dummies (along the lines of what the authors have done in their own Table V).
+
+**9.** Create a table that summarizes the results of the models. You should use `modelsummary` to do so. 
+
+**NOTE**: The `modelsummary` table will exceed the width of the PDF document upon knitting. One solution is to set `output = "kableExtra"` inside `modelsummary` and then pipe the output to `kableExtra::kable_styling()`. This will allow you to use the `latex_options = "scale_down"` option in `kableExtra`, which will scale the table down to fit within the PDF document. This option requires several latex packages, which I have loaded in the `YAML` header at the top of this RMD. It also requires that we add `results = 'asis'` to the code chunk options. This allows the table to be printed as-is, without being wrapped in a `kable` function. Here is an example of how to do this:
+
+```{r results = 'asis', eval = FALSE}
+# You may need to install the kableExtra package
+model_summary(models, output = "kableExtra") %>%
+  kableExtra::kable_styling(latex_options = "scale_down")
+```
+
+```{r results = 'asis'}
+
+```
+
+
+# Wrap up
+When you have finished:
+
+- Knit the RMD to PDF.
+- Review the PDF for completeness and accuracy.
+- Submit the RMD and PDF via email.
