@@ -1,0 +1,299 @@
+---
+title: "Untitled"
+author: "Mark Deming"
+date: "2025-04-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rvest)
+```
+
+### Overview
+This document builds from Wickham's chapter on web scraping from *R for Data Science*. 
+
+```{r}
+html <- read_html("http://rvest.tidyverse.org/")
+html
+
+html <- minimal_html("
+  <h1>This is a heading</h1>
+  <p id='first'>This is a paragraph</p>
+  <p class='important'>This is an important paragraph</p>
+")
+
+html %>% html_elements("p")           # grab all p (paragraph) elements
+html %>% html_elements(".important")  # grab all elements with class 'important' (. denotes class selector)
+html %>% html_elements("#first")      # grab all elements with id 'first' (# denotes id selector)
+
+html |> html_element("p")             # grab first p (paragraph) element
+```
+
+
+```{r}
+html <- minimal_html("
+  <ul>
+    <li><b>C-3PO</b> is a <i>droid</i> that weighs <span class='weight'>167 kg</span></li>
+    <li><b>R4-P17</b> is a <i>droid</i></li>
+    <li><b>R2-D2</b> is a <i>droid</i> that weighs <span class='weight'>96 kg</span></li>
+    <li><b>Yoda</b> weighs <span class='weight'>66 kg</span></li>
+  </ul>
+  ")
+```
+
+
+```{r}
+characters <- html %>% html_elements("li") # grab all li (list) elements
+characters
+
+characters %>% html_element("b")           # grab first b (break) element
+characters %>% html_elements(".weight")    # grab all elements with class 'weight' (. denotes class selector)
+```
+
+
+```{r}
+characters %>%            
+  html_element("b") %>%  # grab first b (break) element
+  html_text2()           # grab only the text
+
+characters |> 
+  html_element(".weight") |> # grab first element with class 'weight' (. denotes class selector)
+  html_text2()               # grab only the text
+```
+
+
+```{r}
+html <- minimal_html("
+  <p><a href='https://en.wikipedia.org/wiki/Cat'>cats</a></p>
+  <p><a href='https://en.wikipedia.org/wiki/Dog'>dogs</a></p>
+")
+```
+
+
+```{r}
+html |> 
+  html_elements("p") |>  # grab all p (paragraph) elements
+  html_element("a") |>   # grab first a (anchor) element
+  html_attr("href")      # grab the href attribute
+```
+
+
+### 24.4.4 Tables
+
+```{r}
+html <- minimal_html("
+  <table class='mytable'>
+    <tr><th>x</th>   <th>y</th></tr>
+    <tr><td>1.5</td> <td>2.7</td></tr>
+    <tr><td>4.9</td> <td>1.3</td></tr>
+    <tr><td>7.2</td> <td>8.1</td></tr>
+  </table>
+  ")
+
+html |> 
+  html_element(".mytable") |>  # grab whole node of class .mytable
+  html_table()                 # grab the table
+```
+
+## 24.5 Finding the right selectors
+Introduces the SelectorGadget bookmark: https://rvest.tidyverse.org/articles/selectorgadget.html.
+
+## 24.6 Practice
+
+### 24.6.1 StarWars
+
+```{r}
+vignette("starwars", package = "rvest")
+
+url <- "https://rvest.tidyverse.org/articles/starwars.html"
+html <- read_html(url)
+
+section <- html |> html_elements("section")
+section
+
+section |> html_element("h2") |> html_text2()
+section |> html_element(".director") |> html_text2()
+
+tibble(
+  title = section |> 
+    html_element("h2") |> 
+    html_text2(),
+  released = section |> 
+    html_element("p") |> 
+    html_text2() |> 
+    str_remove("Released: ") |> 
+    parse_date(),
+  director = section |> 
+    html_element(".director") |> 
+    html_text2(),
+  intro = section |> 
+    html_element(".crawl") |> 
+    html_text2()
+)
+```
+
+### 24.7 IMDB top films
+
+```{r}
+url <- "https://web.archive.org/web/20220201012049/https://www.imdb.com/chart/top/"
+html <- read_html(url)
+
+table <- html |> 
+  html_element("table") |> 
+  html_table()
+table
+
+ratings <- table |>
+  select(
+    rank_title_year = `Rank & Title`,
+    rating = `IMDb Rating`
+  ) |> 
+  mutate(
+    rank_title_year = str_replace_all(rank_title_year, "\n +", " ")
+  ) |> 
+  separate_wider_regex(
+    rank_title_year,
+    patterns = c(
+      rank = "\\d+", "\\. ",  # \\d+ means "one or more digits"
+      title = ".+", " +\\(",  # .+ means "one or more of any character"
+      year = "\\d+", "\\)"    # \\d+ means "one or more digits"
+    )
+  )
+
+
+html |> 
+  html_elements("td strong") |> 
+  head() |> 
+  html_attr("title")
+
+ratings |>
+  mutate(
+    rating_n = html |> html_elements("td strong") |> html_attr("title")
+  ) |> 
+  separate_wider_regex(
+    rating_n,
+    patterns = c(
+      "[0-9.]+ based on ",
+      number = "[0-9,]+",
+      " user ratings"
+    )
+  ) |> 
+  mutate(
+    number = parse_number(number)
+)
+
+```
+
+
+### Scrape IMDB: Extension I
+
+Navigate to the IMDB rankings page above. Then, use Inspect Element to view the HTML source code. The key is to identify the node that contains the data that we wish to scrape. e.g.:
+
+![](images/imdb_node.png)
+
+We see above that movie titles are contained in the `a` tag. We can use this information to scrape the movie titles from the IMDB page.
+
+```{r}
+url <- "https://web.archive.org/web/20220201012049/https://www.imdb.com/chart/top/"
+
+hmtl <- rvest::read_html(url)
+
+movie_titles <- html %>%
+  html_nodes("a") %>%
+  html_text()
+```
+
+It's as simple as that. Of course, there is still some cleaning to do of the indidividual columns.
+
+
+### Scrape IMDB: Extension II
+
+Wickham introduces the SelectorGadget (SG) but does not demonstrate its use. It is pretty simple in practice. We first add the SG to our bookmarks. Then:
+
+- Navigate to the page you wish to scrape. 
+- Open the SG bookmark and click on the elements you wish to scrape. 
+- The SG will highlight the elements you have selected and provide the CSS selector for those elements. 
+- Copy-paste the CSS selector elements into your code.
+
+For example, if you navigate to the IMDB rankings page and click on a movie title, the `a` tag will appear in the SG. We can simply add this to our code as above.
+
+
+### Scrape Wikipedia table
+
+Imagine that we want to scrape results for the 2000 lower-chamber elections in Mexico from Wikipedia (https://en.wikipedia.org/wiki/2000_Mexican_general_election). Wikipedia stores election results as tables, so we can start by grabbing all tables from the relevant page:
+
+```{r}
+# Read in the HTML page
+url <- "https://en.wikipedia.org/wiki/2000_Mexican_general_election"
+html <- read_html(url)
+
+# Grab all tables from the page
+table <- html |> 
+  html_elements("table") |>
+  html_table()
+table
+
+# How many tables did we grab? 18...
+length(table)
+```
+
+The key is identify the correct table. One way is to simply print each table and examine the output:
+
+```{r}
+print(table[[1]])
+print(table[[2]])
+print(table[[3]])
+print(table[[4]])
+# ...and so forth
+
+print(table[[17]])
+
+# Note: We use double brackets [[ ]] to extract
+# a single element from a list.
+```
+
+Comparing the output above to the Wikipedia page, we find that we want the 17th table. Let's grab it:
+
+```{r}
+my_table <- table[[17]]
+```
+
+Examining `my_table`, we see that there is some cleaning to do. We won't do that here.
+
+
+
+
+```{r}
+table(unique(dataframe$variable_name)) 
+
+dataframe$variable <-  gsub("[b]", "", variable_name)
+
+dataframe <- dataframe %>%
+  mutate(variable_name = gsub("[b]", "", variable_name))
+
+html_vector <- c("html1",
+                 "html2",
+                 "html3",
+                 "html4",
+                 "html5",
+                 "html6",
+                 "html7",
+                 "html8",
+                 "html9",
+                 "html10")
+
+for (i in 1:length(html_vector)) {
+  table <- html |> 
+  html_elements("table") |>
+  html_table()
+}
+
+# Tidy the data frame in some way first?
+
+table <- table %>%
+  filter(XXXX %in% "lower house") 
+
+```
