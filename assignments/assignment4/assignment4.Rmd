@@ -87,7 +87,7 @@ summarized_dat <- summarized_dat %>%
 
 You will now replicate Table V on page 1000 of the article. The Table presents results from 8 regression models. Models 1, 3, 5, and 7 are OLS models. Models 2, 4, 6, and 8 are TSLS (Two Stage Least Squares) models. The models are estimated using the `ivreg` function from the `ivreg` package.
 
-Table V analyzes men born during 1930-1930. The first step, then, is to create a subset of the data that grabs on rows in which `yob` is within 1930:1939. 
+Table V analyzes men born during 1930-1939. The first step, then, is to create a subset of the data that grabs on rows in which `yob` is within 1930:1939. 
 
 **5.** Subset the data to grab only rows in which `yob` is within `1930:1939`.
 ```{r}
